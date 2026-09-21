@@ -1,0 +1,10 @@
+# The pipeline is STANDARD-LIBRARY-ONLY by design: no pandas, no requests, no
+# numpy. Transforms, CSV writing and the HTML report are all hand-rolled so
+# that a fresh machine with python3 can run the whole thing.
+#
+# boto3 is the single exception, and it is needed SOLELY for the
+# AVNI_USERNAME / AVNI_PASSWORD Cognito login path. It is imported lazily
+# inside avni_auth, so it is never touched unless you actually log in.
+#
+# If you supply AVNI_AUTH_TOKEN instead, install nothing at all.
+boto3

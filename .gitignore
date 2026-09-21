@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------------------
+# Deny-all allowlist (DIL house style).
+#
+# Everything is ignored by default; a short allowlist adds back the few file
+# types that belong in version control; a block of hard denials then outranks
+# the allowlist. Last matching pattern wins, so ORDER IN THIS FILE MATTERS --
+# add new allowances to the allowlist section, never below the denials.
+#
+# This repository is PUBLIC. When in doubt, leave it ignored.
+# ---------------------------------------------------------------------------
+
+# 1. Deny everything ...
+*
+
+# 2. ... but descend into directories, so the allowlist below can reach files.
+!*/
+
+# ---------------------------------------------------------------------------
+# 3. Allowlist: the only file types this repo tracks.
+# ---------------------------------------------------------------------------
+!*.py
+!*.md
+!.gitignore
+!.gitkeep
+!.env.example
+# Anchored to the repo root: an unanchored !requirements.txt would also
+# un-ignore a stray 2-code/requirements.txt at any depth.
+!/requirements.txt
+!/LICENSE
+
+# ---------------------------------------------------------------------------
+# 4. Hard denials. These sit below the allowlist on purpose, so they win.
+# ---------------------------------------------------------------------------
+
+# --- TWO DELIBERATE DEVIATIONS FROM THE DIL REFERENCE .gitignore -----------
+#
+# (a) *.html is denied GLOBALLY, including under 3-output/.
+#     The pipeline's report.html is not a rendered summary: it embeds the
+#     ENTIRE dataset as inline JSON -- real village names, operator usernames,
+#     free-text grievances. It is a data file that happens to have a viewer
+#     attached, so it is treated as data, not as an output artifact.
+#
+# (b) *.csv is denied GLOBALLY. The reference allows CSV under 3-output/**,
+#     but every CSV this pipeline writes is record-level data, and
+#     data_dictionary.csv is not an exception: its `example` column is
+#     populated from live rows.
+#
+# Neither of these is an oversight. Do not "fix" them. See AGENTS.md
+# > Deliberate deviations from the DIL convention.
+*.html
+*.csv
+
+# --- secrets ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- OS / editor / tooling cruft -------------------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# 5. 1-data/ mirrors Box. NOTHING under it is ever committed except the
+#    directory structure, the sidecar .md documentation and .gitkeep markers.
+# ---------------------------------------------------------------------------
+1-data/**
+!1-data/**/
+!1-data/**/*.md
+!1-data/**/.gitkeep
