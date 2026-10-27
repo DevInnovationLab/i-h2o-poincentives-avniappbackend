@@ -259,13 +259,32 @@ encounters. For a Pump these are **general encounters** (`GET /api/encounters`):
 |---|---|
 | Visit Name | `"Encounter type"` (the form name) |
 | Visit Scheduled Date | `"Earliest scheduled date"` |
+| (visit overdue from) | `"Max scheduled date"` |
 | Visit Completed Date | `"Encounter date time"` |
-| Visit Cancel Date | `"Cancel datetime"` |
+| Visit Cancel Date | `"Cancel date time"` (with spaces) |
 
 An encounter with a scheduled date but no `Encounter date time` is a *planned*
 (not yet done) visit; with `Encounter date time` set it is *completed*; with
-`Cancel datetime` set it is *cancelled*. That three-way split is the `status`
-column downstream.
+`Cancel date time` set it is *cancelled*. That three-way split is the `status`
+column downstream. (Earlier versions of this pipeline read the key as
+`Cancel datetime`, which the API does not send, so no cancellation was ever
+detected; `transform.py` now reads `Cancel date time` and still accepts the old
+spelling.)
+
+**Schedule dates are local midnight sent as UTC.** Even under `version=2`,
+`Earliest scheduled date` and `Max scheduled date` arrive as full ISO
+timestamps, and the time is always `18:30:00.000Z`: midnight in India, which is
+the *previous* UTC day. Taking the UTC date part is therefore one day early; the
+pipeline converts to the run timezone (`--tz`, default `Asia/Kolkata`) before
+taking the date. `Max scheduled date` is the moment Avni treats the visit as
+overdue, and is what `is_on_time` is measured against.
+
+**Who submitted a visit is `Last modified by`, not `Created by`.** Avni creates
+the *next* scheduled encounter at the moment the previous one is submitted (and
+the first one when the pump is registered), so a scheduled encounter's
+`Created by` is whoever submitted the previous survey or registered the pump.
+Filling the form in is an edit of that existing record, so `Last modified by`
+names the submitter.
 
 ---
 
@@ -316,7 +335,11 @@ This repo only ever reads; the write endpoints are listed for completeness.
 - **Version** (`version` query param): `1` = ISO datetimes for user dates;
   `2` = `yyyy-MM-dd` for user-intended dates (recommended, our default). Audit
   timestamps and the `lastModifiedDateTime` request param stay full ISO
-  (`yyyy-MM-dd'T'HH:mm:ss.SSSZ`) in all versions.
+  (`yyyy-MM-dd'T'HH:mm:ss.SSSZ`) in all versions. Under `version=2`,
+  `Registration date` and date-type observations (e.g. `Effective Date`) come as
+  bare `yyyy-MM-dd`, but the encounter schedule fields (`Earliest scheduled date`,
+  `Max scheduled date`) still come as full ISO timestamps of local midnight in
+  UTC — see the "Completed visits" mapping above.
 
 ---
 
@@ -333,7 +356,7 @@ This repo only ever reads; the write endpoints are listed for completeness.
 **ProgramEncounter**: `ID`, `External ID`, `Voided`, `Subject ID`, `Subject external ID`,
 `Subject type`, `Enrolment ID`, `Enrolment external ID`, `Program`, `Encounter type`,
 `Encounter location`, `Encounter date time`, `Earliest scheduled date`,
-`Max scheduled date`, `observations{}`, `Cancel location`, `Cancel datetime`,
+`Max scheduled date`, `observations{}`, `Cancel location`, `Cancel date time`,
 `cancelObservations{}`, `audit`.
 
 **Encounter** (general): same as ProgramEncounter minus the `Enrolment*`/`Program` fields.
@@ -342,8 +365,10 @@ This repo only ever reads; the write endpoints are listed for completeness.
 `Relative external ID`, `Enter date`, `Exit date`.
 
 **Audit**: `Created at`, `Last modified at`, `Created by`, `Last modified by`.
-`Created by` is the operator username and is how `operators.csv` exists at all —
-there is no user endpoint.
+These usernames are how `operators.csv` exists at all — there is no user
+endpoint. On encounters the submitter is `Last modified by` (falling back to
+`Created by` when it is missing); see the
+["Completed visits" mapping](#completed-visits-screen--api-mapping) for why.
 
 **ResponsePage** (list wrapper): `content[]`, `totalElements` (per-page, see
 [Pagination](#pagination--versioning)), `totalPages`, `pageSize`.
@@ -522,6 +547,11 @@ client-side join described under [Join keys](#join-keys).
 - **uuid vs External ID**: `/api/encounters?subjectId=` wants the **uuid**;
   `/api/programEnrolments?subject=` wants the **External ID** (+ `program`);
   otherwise walk `enrolments[]`.
+- **Schedule dates are India midnight in UTC** (`...T18:30:00.000Z` on the
+  previous UTC day). Never take the UTC date part; convert to the local timezone
+  first. The cancel key is `Cancel date time`, with spaces.
+- **`Created by` on an encounter is not the submitter** — Avni creates the next
+  scheduled visit when the previous one is submitted. Use `Last modified by`.
 - **Concept names are the schema.** Renaming a concept in the Admin app changes
   the payload keys; the unmapped-concept count in `_quality_report.md` is the
   early warning.

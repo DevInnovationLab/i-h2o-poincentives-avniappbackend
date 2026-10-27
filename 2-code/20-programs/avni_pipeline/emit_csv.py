@@ -11,7 +11,8 @@ and again in data_dictionary.csv):
   * booleans  -> 1 / 0            (models want numerics; dtype is 'bool01')
   * missing   -> empty cell       (never a sentinel like -1 or 0)
   * datetimes -> ISO 8601 UTC with a trailing Z
-  * dates     -> ISO 8601 (yyyy-mm-dd)
+  * dates     -> ISO 8601 (yyyy-mm-dd), the LOCAL calendar date in the run's
+                 timezone (manifest.timezone), never the UTC date part
   * lists     -> pipe-joined in a single cell
   * ids       -> strings, always (never coerced to numbers)
   * column order and row order are stable, so re-runs diff cleanly
@@ -35,7 +36,7 @@ import os
 
 from . import concepts, transform
 
-ANALYSIS_TABLES = ["subjects", "operators", "encounters",
+ANALYSIS_TABLES = ["subjects", "operators", "pump_schedule", "encounters",
                    transform.SURVEY, transform.GRIEVANCE, transform.PAYMENT,
                    "observations_long"]
 VOIDED_TABLES = ["subjects_voided", "encounters_voided"]
@@ -127,7 +128,7 @@ def write_manifest(tables, out_dir, written):
         "pipeline_version": _pipeline_version(),
         "source": dict(tables.meta),
         "encoding": {"booleans": "1/0", "missing": "empty cell",
-                     "datetimes": "ISO 8601 UTC (Z)", "dates": "ISO 8601",
+                     "datetimes": "ISO 8601 UTC (Z)", "dates": "ISO 8601, local calendar date (see source.timezone)",
                      "lists": "pipe-joined", "ids": "string"},
         "factor_levels": concepts.FACTOR_LEVELS,
         "tables": {name: {"rows": len(table.rows), "columns": len(table.columns),

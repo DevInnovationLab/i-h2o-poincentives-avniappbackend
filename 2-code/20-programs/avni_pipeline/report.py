@@ -136,6 +136,7 @@ def build_model(tables):
             "sched": _iso(r.get("scheduled_date")), "comp": _iso(r.get("completed_at")),
             "cancel": _iso(r.get("cancelled_at")), "by": r.get("submitted_by") or "",
             "mod": r.get("last_modified_by") or "",
+            "created": r.get("created_by") or "",
             "lag": r.get("submission_lag_days"),
             "onTime": r.get("is_on_time"),
             "obs": obs.get(r["encounter_id"], []) + extra.get("derived", []),
@@ -428,15 +429,29 @@ function esc(s){
     c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 function encDate(e){ return e.comp || e.sched || e.cancel || null; }
-function dayOf(s){ return s ? s.slice(0, 10) : null; }
+/* Calendar days are shown in the run's timezone (manifest.timezone), never the
+   viewer's and never the UTC date part: a bare yyyy-mm-dd is already a local date;
+   a UTC timestamp is converted to the run timezone before taking its day. */
+const DAY_FMT = (() => {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {timeZone: META.timezone || "Asia/Kolkata",
+      year: "numeric", month: "2-digit", day: "2-digit"});
+  } catch(err) { return null; }
+})();
+function dayOf(s){
+  if(!s) return null;
+  if(s.length <= 10 || !DAY_FMT) return s.slice(0, 10);
+  const d = new Date(s);
+  return isNaN(d) ? s.slice(0, 10) : DAY_FMT.format(d);
+}
 function fmtDay(s){
   if(!s) return "-";
-  const d = new Date(s.slice(0, 10) + "T00:00:00");
+  const d = new Date(dayOf(s) + "T00:00:00");
   return isNaN(d) ? s : d.toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"});
 }
 function fmtShort(s){
   if(!s) return "-";
-  const d = new Date(s.slice(0, 10) + "T00:00:00");
+  const d = new Date(dayOf(s) + "T00:00:00");
   return isNaN(d) ? s : d.toLocaleDateString(undefined, {month:"short", day:"numeric"});
 }
 function num(v, digits){
@@ -740,6 +755,7 @@ function detailHtml(e){
       ' <span class="mono">' + esc(e.sid) + "</span></div></div>" +
     '<div class="o"><div class="k">Submitted by</div><div class="v">' + esc(e.by || "-") +
       (e.mod && e.mod !== e.by ? ' <span class="sub">(last modified by ' + esc(e.mod) + ")</span>" : "") +
+      (e.created && e.created !== e.by ? ' <span class="sub">(record created by ' + esc(e.created) + ")</span>" : "") +
       "</div></div>" +
     '<div class="o"><div class="k">Encounter ID</div><div class="v mono">' + esc(e.id) + "</div></div>" +
     (e.lag === null || e.lag === undefined ? "" :

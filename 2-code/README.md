@@ -4,7 +4,8 @@ All the code. Two folders, and the split between them is the point.
 
 ```
 20-programs/    reusable code   avni_auth.py, envfile.py, avni_pipeline/
-21-wrangling/   the CLI programs avni_to_tables.py, fetch_media.py, sync_box.py
+21-wrangling/   the CLI programs avni_to_tables.py, fetch_media.py, sync_box.py,
+                                 review_app.py
 ```
 
 ## `20-programs/` — the import root
@@ -20,7 +21,7 @@ exception in `pull.py`, are in `AGENTS.md > The import contract`.
 
 ## `21-wrangling/` — the programs
 
-The three command-line programs. Each exposes `main(argv=None) -> int` so
+The four command-line programs. Each exposes `main(argv=None) -> int` so
 `Main.py` can dispatch to it, and each is runnable directly for debugging.
 Reach for these through `Main.py` in normal use.
 

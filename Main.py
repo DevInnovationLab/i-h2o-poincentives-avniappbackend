@@ -4,11 +4,12 @@ Main.py
 -------
 The single entry point for the pipeline (the Python counterpart of `Main.R` in
 the DIL R repos). It loads `.env`, puts the import root on `sys.path`, and
-dispatches to one of the three command-line programs.
+dispatches to one of the four command-line programs.
 
     python3 Main.py tables [args]   ->  21-wrangling/avni_to_tables.main(args)
     python3 Main.py media  [args]   ->  21-wrangling/fetch_media.main(args)
     python3 Main.py box    [args]   ->  21-wrangling/sync_box.main(args)
+    python3 Main.py review [args]   ->  21-wrangling/review_app.main(args)
 
 Everything after the sub-command is passed straight through, so the underlying
 programs' own `--help` and options work unchanged:
@@ -16,6 +17,7 @@ programs' own `--help` and options work unchanged:
     python3 Main.py tables --out 1-data/12-avni/121-clean/ --subject-type Pump
     python3 Main.py media  --dir 1-data/12-avni/121-clean/ --dry-run
     python3 Main.py box    --dir 1-data/12-avni/121-clean/ --raw <snapshot>.json
+    python3 Main.py review --village "Village A" --village "Village B"
 
 Dependencies: standard library only.
 """
@@ -41,6 +43,7 @@ COMMANDS = {
     "tables": ("avni_to_tables", "pull/transform -> CSV tables + HTML report"),
     "media": ("fetch_media", "download the field photos into <out>/media/"),
     "box": ("sync_box", "publish an output directory to Box Drive"),
+    "review": ("review_app", "local UI to approve/reject submissions, saved to CSV"),
 }
 
 

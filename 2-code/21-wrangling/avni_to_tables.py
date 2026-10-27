@@ -95,7 +95,7 @@ def parse_args(argv=None):
     p.add_argument("--tz", default="Asia/Kolkata",
                    help="local timezone for calendar/derived features")
     p.add_argument("--grace-days", type=float, default=0.0,
-                   help="days after the scheduled date that still count as on time")
+                   help="days after the Max scheduled date (visit-window end) that still count as on time")
     p.add_argument("--chlorine-band", default=None, metavar="LOW,HIGH",
                    help="add chlorine_in_target for this mg/L band, e.g. 0.2,2.0")
     p.add_argument("--include-planned", action="store_true",

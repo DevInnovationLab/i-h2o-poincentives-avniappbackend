@@ -159,7 +159,8 @@ SUBJECT_COLUMNS = [
     C("district", "factor", "", "location.District", "Address level 4."),
     C("state", "factor", "", "location.State", "Address level 5."),
     C("address_raw", "string", "", "location{}", "Full hierarchy, pipe-joined (keeps non-standard levels)."),
-    C("registration_date", "date", "", "Subject.Registration date", "When the pump was registered."),
+    C("registration_date", "date", "local", "Subject.Registration date",
+      "Local calendar date the pump was registered (see manifest.timezone)."),
     C("subj_created_at", "datetime", "UTC", "audit.Created at", "Subject creation timestamp."),
     C("subj_last_modified_at", "datetime", "UTC", "audit.Last modified at", "Subject last-modified timestamp."),
     C("subj_created_by", "factor", "", "audit.Created by", "User who registered the pump."),
@@ -167,7 +168,8 @@ SUBJECT_COLUMNS = [
     C("n_completed", "int", "count", "derived", "Completed encounters for this subject."),
     C("first_completed_at", "datetime", "UTC", "derived", "Earliest completed encounter."),
     C("last_completed_at", "datetime", "UTC", "derived", "Latest completed encounter."),
-    C("distinct_operators", "int", "count", "derived", "Distinct submitting users on this subject."),
+    C("distinct_operators", "int", "count", "derived",
+      "Distinct submitted_by users (audit.Last modified by) on this subject's encounters."),
     C("voided", "bool01", "", "Subject.Voided", "1 = tombstone; voided subjects are in subjects_voided."),
 ]
 
@@ -181,7 +183,10 @@ ENCOUNTER_COLUMNS = [
     C("form_version", "factor", "", "derived", "v1 / v2 for the two survey forms; blank otherwise."),
     C("fact_table", "factor", "", "derived", "Which fact table this encounter feeds (blank = unmapped type)."),
     C("status", "factor", "", "derived", "completed | planned | cancelled."),
-    C("scheduled_date", "date", "", "Encounter.Earliest scheduled date", "Visit scheduled date (UTC date part)."),
+    C("scheduled_date", "date", "local", "Encounter.Earliest scheduled date",
+      "Local calendar date the visit window opens (Avni sends local midnight as UTC)."),
+    C("max_scheduled_date", "date", "local", "Encounter.Max scheduled date",
+      "Local calendar date the visit becomes overdue (end of the visit window)."),
     C("completed_at", "datetime", "UTC", "Encounter.Encounter date time", "Submission timestamp."),
     C("completed_date", "date", "local", "derived", "Local calendar date of completed_at (see manifest.timezone)."),
     C("completed_year", "int", "local", "derived", "Local year of completion."),
@@ -189,10 +194,17 @@ ENCOUNTER_COLUMNS = [
     C("completed_iso_week", "int", "local", "derived", "Local ISO week 1-53."),
     C("completed_day_of_week", "int", "local", "derived", "Local ISO weekday, 1=Mon .. 7=Sun."),
     C("completed_hour", "int", "local", "derived", "Local hour of day 0-23."),
-    C("cancelled_at", "datetime", "UTC", "Encounter.Cancel datetime", "Cancellation timestamp."),
-    C("submission_lag_days", "float", "days", "derived", "completed_at - scheduled date; negative = early."),
-    C("is_on_time", "bool01", "", "derived", "1 if completed on/before the scheduled date + grace."),
-    C("submitted_by", "factor", "", "audit.Created by", "Operator username who submitted."),
+    C("cancelled_at", "datetime", "UTC", "Encounter.Cancel date time", "Cancellation timestamp."),
+    C("submission_lag_days", "float", "days", "derived",
+      "completed_at - Earliest scheduled date timestamp; negative = early."),
+    C("is_on_time", "bool01", "", "derived",
+      "1 if completed_at <= Max scheduled date timestamp + grace days "
+      "(Earliest scheduled date when Max is missing)."),
+    C("submitted_by", "factor", "", "audit.Last modified by (fallback audit.Created by)",
+      "User who submitted this encounter."),
+    C("created_by", "factor", "", "audit.Created by",
+      "User who created the record; for a scheduled visit this is whoever submitted the "
+      "previous visit or registered the pump, not the submitter."),
     C("last_modified_by", "factor", "", "audit.Last modified by", "User who last edited."),
     C("created_at", "datetime", "UTC", "audit.Created at", "Record creation timestamp."),
     C("last_modified_at", "datetime", "UTC", "audit.Last modified at", "Record last-modified timestamp."),
@@ -210,7 +222,8 @@ FACT_KEY_COLUMNS = [
     C("village", "factor", "", "location.Village", "Denormalised for grouping."),
     C("district", "factor", "", "location.District", "Denormalised for grouping."),
     C("state", "factor", "", "location.State", "Denormalised for grouping."),
-    C("submitted_by", "factor", "", "audit.Created by", "Operator username."),
+    C("submitted_by", "factor", "", "audit.Last modified by (fallback audit.Created by)",
+      "Operator username who submitted."),
     C("completed_at", "datetime", "UTC", "Encounter.Encounter date time", "Submission timestamp."),
     C("completed_date", "date", "local", "derived", "Local calendar date of submission."),
 ]
@@ -246,9 +259,14 @@ SURVEY_COLUMNS = FACT_KEY_COLUMNS + [
     C("damaged_part_photo_urls", "string(url list)", "URL(s)", "Please upload a picture of the damaged or leaking device part",
       "Pipe-joined private S3 URLs."),
     C("damaged_part_photo_count", "int", "count", "derived", "Number of damaged-part photos uploaded."),
-    C("scheduled_date", "date", "", "Encounter.Earliest scheduled date", "Scheduled visit date."),
-    C("submission_lag_days", "float", "days", "derived", "completed_at - scheduled date; negative = early."),
-    C("is_on_time", "bool01", "", "derived", "1 if submitted on/before schedule + grace."),
+    C("scheduled_date", "date", "local", "Encounter.Earliest scheduled date",
+      "Local calendar date the visit window opens."),
+    C("max_scheduled_date", "date", "local", "Encounter.Max scheduled date",
+      "Local calendar date the visit becomes overdue."),
+    C("submission_lag_days", "float", "days", "derived",
+      "completed_at - Earliest scheduled date timestamp; negative = early."),
+    C("is_on_time", "bool01", "", "derived",
+      "1 if completed_at <= Max scheduled date timestamp + grace days (Earliest if Max missing)."),
     C("pump_submission_seq", "int", "count", "derived", "1-based survey sequence within this pump."),
     C("pump_prior_submissions", "int", "count", "derived", "Surveys this pump had before this one."),
     C("pump_days_since_prev_submission", "float", "days", "derived", "Gap to this pump's previous survey."),
@@ -273,7 +291,7 @@ GRIEVANCE_BASE_COLUMNS = FACT_KEY_COLUMNS + [
 PAYMENT_COLUMNS = FACT_KEY_COLUMNS + [
     C("rate_odisha_inr", "float", "INR", "Odisha Rate", "Per-survey payment rate for Odisha."),
     C("rate_andhra_pradesh_inr", "float", "INR", "Andhra Pradesh Rate", "Per-survey payment rate for Andhra Pradesh."),
-    C("rate_effective_date", "date", "", "Effective Date", "Date the rate takes effect."),
+    C("rate_effective_date", "date", "local", "Effective Date", "Local calendar date the rate takes effect."),
 ]
 
 LONG_COLUMNS = [
@@ -288,12 +306,13 @@ LONG_COLUMNS = [
     C("is_list", "bool01", "", "derived", "1 if the source value was a multi-select list."),
     C("list_index", "int", "", "derived", "0-based position within the multi-select; empty for scalars."),
     C("media_url", "string(url)", "URL", "derived", "Set when the value is a media URL (private S3)."),
-    C("submitted_by", "factor", "", "audit.Created by", "Operator username."),
+    C("submitted_by", "factor", "", "audit.Last modified by (fallback audit.Created by)",
+      "Operator username who submitted."),
     C("completed_at", "datetime", "UTC", "Encounter.Encounter date time", "Submission timestamp."),
 ]
 
 OPERATOR_COLUMNS = [
-    C("operator", "string", "", "audit.Created by", "Avni username (PK)."),
+    C("operator", "string", "", "encounters.submitted_by", "Avni username (PK)."),
     C("n_submissions", "int", "count", "derived", "Completed encounters submitted."),
     C("n_surveys", "int", "count", "derived", "Self-report surveys submitted."),
     C("n_grievances", "int", "count", "derived", "Grievance forms submitted."),
@@ -306,7 +325,57 @@ OPERATOR_COLUMNS = [
     C("span_days", "float", "days", "derived", "last - first submission."),
     C("mean_gap_days", "float", "days", "derived", "Mean gap between consecutive submissions."),
     C("gap_cv", "float", "ratio", "derived", "Coefficient of variation of gaps = consistency score (lower = steadier)."),
-    C("on_time_rate", "float", "ratio", "derived", "Share of scheduled submissions made on time."),
+    C("on_time_rate", "float", "ratio", "derived",
+      "Share of scheduled submissions made on time (see encounters.is_on_time)."),
+]
+
+PUMP_SCHEDULE_COLUMNS = [
+    C("subject_id", "string(uuid)", "", "Subject.ID", "PK; FK to subjects.subject_id (Pump subjects only)."),
+    C("subject_name", "string", "", "derived", "Denormalised pump label."),
+    C("village", "factor", "", "location.Village", "Denormalised for grouping."),
+    C("gram_panchayat", "factor", "", "location.Gram Panchayat", "Denormalised for grouping."),
+    C("block", "factor", "", "location.Block", "Denormalised for grouping."),
+    C("district", "factor", "", "location.District", "Denormalised for grouping."),
+    C("state", "factor", "", "location.State", "Denormalised for grouping."),
+    C("registration_date", "date", "local", "Subject.Registration date",
+      "Local calendar date the pump was registered."),
+    C("as_of_at", "datetime", "UTC", "meta.pulled_at",
+      "Reference moment for every status column: when the snapshot was pulled (not the build time)."),
+    C("as_of_date", "date", "local", "derived", "Local calendar date of as_of_at."),
+    C("n_surveys_scheduled", "int", "count", "derived",
+      "Survey encounters on this pump, any status (each one is a scheduled visit)."),
+    C("n_surveys_completed", "int", "count", "derived", "Survey encounters with status completed."),
+    C("n_surveys_cancelled", "int", "count", "derived", "Survey encounters with status cancelled."),
+    C("n_open_planned", "int", "count", "derived",
+      "Survey encounters with status planned (not yet submitted, not cancelled). Normally 1."),
+    C("multiple_open_planned", "bool01", "", "derived",
+      "1 if n_open_planned > 1 (unexpected; next_due_* then describes the latest one)."),
+    C("n_surveys_missed", "int", "count", "derived",
+      "Planned surveys already overdue as of as_of_date (same rule as next_due_status = overdue)."),
+    C("n_on_time", "int", "count", "derived", "Completed surveys with is_on_time = 1."),
+    C("on_time_rate", "float", "ratio", "derived",
+      "n_on_time / completed surveys with a known is_on_time; empty if none."),
+    C("first_survey_due_date", "date", "local", "derived",
+      "Earliest scheduled_date across this pump's surveys (any status)."),
+    C("first_completed_at", "datetime", "UTC", "derived", "Earliest survey completed_at."),
+    C("first_completed_date", "date", "local", "derived", "Local calendar date of first_completed_at."),
+    C("last_completed_at", "datetime", "UTC", "derived", "Latest survey completed_at."),
+    C("last_completed_date", "date", "local", "derived", "Local calendar date of last_completed_at."),
+    C("last_submitted_by", "factor", "", "derived", "submitted_by of the latest completed survey."),
+    C("days_since_last_completed", "float", "days", "derived",
+      "as_of_at - last_completed_at; empty if the pump never submitted."),
+    C("next_due_encounter_id", "string(uuid)", "", "derived",
+      "FK to encounters.encounter_id: the open planned survey with the latest scheduled_date."),
+    C("next_due_date", "date", "local", "Encounter.Earliest scheduled date",
+      "scheduled_date of the next-due survey (visit window opens)."),
+    C("next_due_window_end_date", "date", "local", "Encounter.Max scheduled date",
+      "max_scheduled_date of the next-due survey (scheduled_date if Max is missing): "
+      "the local day the visit becomes overdue."),
+    C("next_due_status", "factor", "", "derived",
+      "upcoming (as_of_date < next_due_date) | due (inside the window) | "
+      "overdue (as_of_date >= next_due_window_end_date + grace days) | none (no open planned survey)."),
+    C("days_overdue", "int", "days", "derived",
+      "as_of_date - next_due_window_end_date when next_due_status = overdue; else empty."),
 ]
 
 
@@ -340,7 +409,7 @@ def build_tables(raw, tz="Asia/Kolkata", include_planned=False, onehot=True,
     all_encounters = list(raw.get("encounters") or []) + list(raw.get("program_encounters") or [])
 
     # ---- subjects ---------------------------------------------------------
-    subject_rows, subject_by_id = _build_subjects(raw.get("subjects") or [])
+    subject_rows, subject_by_id = _build_subjects(raw.get("subjects") or [], tzinfo)
 
     # ---- encounters spine -------------------------------------------------
     enc_rows = _build_encounters(all_encounters, subject_by_id, tzinfo, grace_days, qc)
@@ -372,17 +441,17 @@ def build_tables(raw, tz="Asia/Kolkata", include_planned=False, onehot=True,
         0 if include_planned else sum(1 for r in live_enc if r["status"] != "completed"))
 
     survey_specs, survey_rows = _build_survey_fact(
-        fact_source, obs_by_encounter, subject_by_id, chlorine_band, qc)
+        fact_source, obs_by_encounter, subject_by_id, chlorine_band, qc, tzinfo)
     ts.add(Table(SURVEY, cols(survey_specs), survey_rows,
                  grain="1 row per self-report survey"), survey_specs)
 
     survey_ids = {r["encounter_id"] for r in survey_rows}
     grievance_specs, grievance_rows = _build_grievance_fact(
-        fact_source, obs_by_encounter, subject_by_id, survey_ids, onehot, qc)
+        fact_source, obs_by_encounter, subject_by_id, survey_ids, onehot, qc, tzinfo)
     ts.add(Table(GRIEVANCE, cols(grievance_specs), grievance_rows,
                  grain="1 row per grievance form"), grievance_specs)
 
-    payment_rows = _build_payment_fact(fact_source, obs_by_encounter, subject_by_id)
+    payment_rows = _build_payment_fact(fact_source, obs_by_encounter, subject_by_id, tzinfo)
     ts.add(Table(PAYMENT, cols(PAYMENT_COLUMNS), payment_rows,
                  grain="1 row per payment-rate change"), PAYMENT_COLUMNS)
 
@@ -390,6 +459,13 @@ def build_tables(raw, tz="Asia/Kolkata", include_planned=False, onehot=True,
     operator_rows = _build_operators(live_enc, tzinfo)
     ts.add(Table("operators", cols(OPERATOR_COLUMNS), operator_rows,
                  grain="1 row per submitting user"), OPERATOR_COLUMNS)
+
+    # ---- pump schedule (built from ALL live survey encounters, planned too) --
+    schedule_rows = _build_pump_schedule(live_subjects, live_enc, ts.meta.get("pulled_at"),
+                                         tzinfo, grace_days, qc)
+    ts.add(Table("pump_schedule", cols(PUMP_SCHEDULE_COLUMNS), schedule_rows,
+                 grain="1 row per pump (survey schedule status as of the pull)"),
+           PUMP_SCHEDULE_COLUMNS)
 
     # ---- tombstones -------------------------------------------------------
     ts.add(Table("subjects_voided", cols(SUBJECT_COLUMNS), voided_subjects,
@@ -426,7 +502,7 @@ def _address(location):
     return levels, "|".join(parts)
 
 
-def _build_subjects(subjects):
+def _build_subjects(subjects, tzinfo):
     rows, by_id = [], {}
     for s in subjects:
         audit = s.get("audit") or {}
@@ -437,7 +513,7 @@ def _build_subjects(subjects):
             "subject_name": _subject_name(s),
             "subject_type": s.get("Subject type"),
             "address_raw": address_raw,
-            "registration_date": concepts.parse_date(s.get("Registration date")),
+            "registration_date": concepts.parse_date(s.get("Registration date"), tzinfo),
             "subj_created_at": concepts.parse_datetime(audit.get("Created at")),
             "subj_last_modified_at": concepts.parse_datetime(audit.get("Last modified at")),
             "subj_created_by": audit.get("Created by") or None,
@@ -472,8 +548,25 @@ def _rollup_subjects(subject_rows, enc_rows):
 # Encounters
 # --------------------------------------------------------------------------- #
 
+def _cancel_value(encounter):
+    """Avni spells the field "Cancel date time"; accept the old misspelling too."""
+    return encounter.get("Cancel date time") or encounter.get("Cancel datetime")
+
+
+def _submitter(audit):
+    """Who filled this encounter in.
+
+    Avni creates the *next* scheduled encounter at the moment the previous one is
+    submitted (and the first one when the pump is registered), so "Created by"
+    names whoever did that, not whoever filled this form. Submitting the visit
+    is an edit of that record, so "Last modified by" is the submitter; fall back
+    to "Created by" only when it is missing.
+    """
+    return audit.get("Last modified by") or audit.get("Created by") or None
+
+
 def _status(encounter):
-    if encounter.get("Cancel datetime"):
+    if _cancel_value(encounter):
         return "cancelled"
     if encounter.get("Encounter date time"):
         return "completed"
@@ -494,8 +587,14 @@ def _build_encounters(encounters, subject_by_id, tzinfo, grace_days, qc):
         audit = e.get("audit") or {}
         completed = concepts.parse_datetime(e.get("Encounter date time"))
         scheduled = concepts.parse_datetime(e.get("Earliest scheduled date"))
+        max_scheduled = concepts.parse_datetime(e.get("Max scheduled date"))
         local = completed.astimezone(tzinfo) if completed else None
         lag = _days_between(completed, scheduled)
+        # On time = submitted before the visit goes overdue (Avni's max-scheduled
+        # moment) plus the grace window; the earliest date stands in if max is absent.
+        deadline = max_scheduled or scheduled
+        on_time = (None if (completed is None or deadline is None)
+                   else completed <= deadline + datetime.timedelta(days=grace_days))
         rows.append({
             "encounter_id": e.get("ID"),
             "subject_id": subject_id,
@@ -506,7 +605,8 @@ def _build_encounters(encounters, subject_by_id, tzinfo, grace_days, qc):
             "form_version": form_version,
             "fact_table": fact_table or "",
             "status": _status(e),
-            "scheduled_date": scheduled.date() if scheduled else None,
+            "scheduled_date": concepts.parse_date(scheduled, tzinfo),
+            "max_scheduled_date": concepts.parse_date(max_scheduled, tzinfo),
             "completed_at": completed,
             "completed_date": local.date() if local else None,
             "completed_year": local.year if local else None,
@@ -514,10 +614,11 @@ def _build_encounters(encounters, subject_by_id, tzinfo, grace_days, qc):
             "completed_iso_week": local.isocalendar()[1] if local else None,
             "completed_day_of_week": local.isoweekday() if local else None,
             "completed_hour": local.hour if local else None,
-            "cancelled_at": concepts.parse_datetime(e.get("Cancel datetime")),
+            "cancelled_at": concepts.parse_datetime(_cancel_value(e)),
             "submission_lag_days": lag,
-            "is_on_time": (None if lag is None else lag <= float(grace_days)),
-            "submitted_by": audit.get("Created by") or None,
+            "is_on_time": on_time,
+            "submitted_by": _submitter(audit),
+            "created_by": audit.get("Created by") or None,
             "last_modified_by": audit.get("Last modified by") or None,
             "created_at": concepts.parse_datetime(audit.get("Created at")),
             "last_modified_at": concepts.parse_datetime(audit.get("Last modified at")),
@@ -592,7 +693,7 @@ def _fact_keys(enc_row, subject_row=None):
     }
 
 
-def _build_survey_fact(enc_rows, obs_by_encounter, subject_by_id, chlorine_band, qc):
+def _build_survey_fact(enc_rows, obs_by_encounter, subject_by_id, chlorine_band, qc, tzinfo):
     specs = list(SURVEY_COLUMNS)
     if chlorine_band:
         specs = specs + [C("chlorine_in_target", "bool01", "",
@@ -607,6 +708,7 @@ def _build_survey_fact(enc_rows, obs_by_encounter, subject_by_id, chlorine_band,
         row.update(_fact_keys(enc, subject_by_id.get(enc["subject_id"])))
         row["form_version"] = enc["form_version"]
         row["scheduled_date"] = enc["scheduled_date"]
+        row["max_scheduled_date"] = enc["max_scheduled_date"]
         row["submission_lag_days"] = enc["submission_lag_days"]
         row["is_on_time"] = enc["is_on_time"]
 
@@ -615,7 +717,7 @@ def _build_survey_fact(enc_rows, obs_by_encounter, subject_by_id, chlorine_band,
             spec = concepts.concept_spec(concept_name)
             if spec is None or spec.table != SURVEY:
                 continue
-            typed = concepts.coerce(spec, value)
+            typed = concepts.coerce(spec, value, tzinfo)
             if spec.column == "tablets_refilled_count":
                 if spec.coalesce_source == "v2":
                     v2_tablets = typed
@@ -694,7 +796,8 @@ def _add_cadence(rows, group_key, seq_col, gap_col, prior_col=None):
         seen[key] = (seq, row["completed_at"])
 
 
-def _build_grievance_fact(enc_rows, obs_by_encounter, subject_by_id, survey_ids, onehot, qc):
+def _build_grievance_fact(enc_rows, obs_by_encounter, subject_by_id, survey_ids, onehot, qc,
+                          tzinfo):
     # Stable schema: every curated indicator column exists whether or not it was
     # selected in this export; uncurated answers append (sorted) and are flagged.
     indicator_specs, indicator_order = [], []
@@ -719,7 +822,7 @@ def _build_grievance_fact(enc_rows, obs_by_encounter, subject_by_id, survey_ids,
             spec = concepts.concept_spec(concept_name)
             if spec is None or spec.table != GRIEVANCE:
                 continue
-            typed = concepts.coerce(spec, value)
+            typed = concepts.coerce(spec, value, tzinfo)
             if spec.dtype == "coded_multi":
                 answers = typed or []
                 n_reasons += len(answers)
@@ -755,7 +858,7 @@ def _build_grievance_fact(enc_rows, obs_by_encounter, subject_by_id, survey_ids,
     return GRIEVANCE_BASE_COLUMNS + indicator_specs, rows
 
 
-def _build_payment_fact(enc_rows, obs_by_encounter, subject_by_id):
+def _build_payment_fact(enc_rows, obs_by_encounter, subject_by_id, tzinfo):
     rows = []
     for enc in enc_rows:
         if enc["fact_table"] != PAYMENT:
@@ -766,7 +869,7 @@ def _build_payment_fact(enc_rows, obs_by_encounter, subject_by_id):
         for concept_name, value in obs.items():
             spec = concepts.concept_spec(concept_name)
             if spec is not None and spec.table == PAYMENT:
-                row[spec.column] = concepts.coerce(spec, value)
+                row[spec.column] = concepts.coerce(spec, value, tzinfo)
         rows.append(row)
     rows.sort(key=lambda r: (r["completed_at"] or datetime.datetime.min.replace(
         tzinfo=datetime.timezone.utc), str(r["encounter_id"])))
@@ -811,6 +914,134 @@ def _build_operators(enc_rows, tzinfo):
                              if scheduled else None),
         })
     rows.sort(key=lambda r: (-r["n_submissions"], r["operator"]))
+    return rows
+
+
+# --------------------------------------------------------------------------- #
+# Pump schedule
+# --------------------------------------------------------------------------- #
+
+def _window_end(enc):
+    """Local day the visit becomes overdue: Max scheduled date, else Earliest.
+
+    Same fallback as ``is_on_time``. Avni's dates are local midnight, so the Max
+    scheduled moment is the start of this day: a submission on it is late.
+    """
+    return enc["max_scheduled_date"] or enc["scheduled_date"]
+
+
+def _next_due_status(as_of_date, due_date, window_end, grace_days):
+    if as_of_date is None or (due_date is None and window_end is None):
+        return None
+    overdue_from = (window_end + datetime.timedelta(days=grace_days)) if window_end else None
+    if overdue_from is not None and as_of_date >= overdue_from:
+        return "overdue"
+    if due_date is not None and as_of_date < due_date:
+        return "upcoming"
+    return "due"
+
+
+def _build_pump_schedule(subject_rows, enc_rows, pulled_at, tzinfo, grace_days, qc):
+    """One row per live Pump: survey counts, timeliness, and the open next visit.
+
+    Built from every live survey encounter regardless of ``include_planned``
+    (that flag only filters the fact tables). Status columns are evaluated at the
+    snapshot's pull time, not the wall clock, so a rebuild is reproducible.
+    """
+    as_of_at = concepts.parse_datetime(pulled_at)
+    as_of_date = as_of_at.astimezone(tzinfo).date() if as_of_at else None
+    if as_of_at is None:
+        qc["warnings"].append(
+            "meta.pulled_at missing or unparseable: pump_schedule status columns are empty.")
+
+    pumps = {r["subject_id"]: r for r in subject_rows if r["subject_type"] == "Pump"}
+    by_pump, stray = {}, 0
+    for e in enc_rows:
+        if e["fact_table"] != SURVEY:
+            continue
+        if e["subject_id"] in pumps:
+            by_pump.setdefault(e["subject_id"], []).append(e)
+        else:
+            stray += 1
+
+    def local_date(dt):
+        return dt.astimezone(tzinfo).date() if dt else None
+
+    rows, multi_open = [], 0
+    for sid, pump in pumps.items():
+        mine = by_pump.get(sid, [])
+        done = sorted((e for e in mine if e["status"] == "completed" and e["completed_at"]),
+                      key=lambda e: (e["completed_at"], str(e["encounter_id"])))
+        cancelled = [e for e in mine if e["status"] == "cancelled"]
+        planned = [e for e in mine if e["status"] == "planned"]
+        timed = [e for e in done if e["is_on_time"] is not None]
+        n_on_time = sum(1 for e in timed if e["is_on_time"])
+
+        def is_overdue(e):
+            return _next_due_status(as_of_date, e["scheduled_date"], _window_end(e),
+                                    grace_days) == "overdue"
+
+        nxt = max(planned, default=None,
+                  key=lambda e: (e["scheduled_date"] or datetime.date.min,
+                                 _window_end(e) or datetime.date.min,
+                                 str(e["encounter_id"])))
+        if len(planned) > 1:
+            multi_open += 1
+        due_date = nxt["scheduled_date"] if nxt else None
+        window_end = _window_end(nxt) if nxt else None
+        status = (_next_due_status(as_of_date, due_date, window_end, grace_days)
+                  if nxt else "none")
+        scheduled_dates = [e["scheduled_date"] for e in mine if e["scheduled_date"]]
+        first, last = (done[0], done[-1]) if done else (None, None)
+
+        rows.append({
+            "subject_id": sid,
+            "subject_name": pump["subject_name"],
+            "village": pump.get("village"),
+            "gram_panchayat": pump.get("gram_panchayat"),
+            "block": pump.get("block"),
+            "district": pump.get("district"),
+            "state": pump.get("state"),
+            "registration_date": pump.get("registration_date"),
+            "as_of_at": as_of_at,
+            "as_of_date": as_of_date,
+            "n_surveys_scheduled": len(mine),
+            "n_surveys_completed": len(done),
+            "n_surveys_cancelled": len(cancelled),
+            "n_open_planned": len(planned),
+            "multiple_open_planned": len(planned) > 1,
+            "n_surveys_missed": (sum(1 for e in planned if is_overdue(e))
+                                 if as_of_date else None),
+            "n_on_time": n_on_time,
+            "on_time_rate": round(n_on_time / len(timed), 3) if timed else None,
+            "first_survey_due_date": min(scheduled_dates) if scheduled_dates else None,
+            "first_completed_at": first["completed_at"] if first else None,
+            "first_completed_date": local_date(first["completed_at"]) if first else None,
+            "last_completed_at": last["completed_at"] if last else None,
+            "last_completed_date": local_date(last["completed_at"]) if last else None,
+            "last_submitted_by": last["submitted_by"] if last else None,
+            "days_since_last_completed": (_days_between(as_of_at, last["completed_at"])
+                                          if last else None),
+            "next_due_encounter_id": nxt["encounter_id"] if nxt else None,
+            "next_due_date": due_date,
+            "next_due_window_end_date": window_end,
+            "next_due_status": status,
+            "days_overdue": ((as_of_date - window_end).days
+                             if status == "overdue" else None),
+        })
+
+    qc["pump_schedule"] = {
+        "pumps": len(rows),
+        "pumps_with_multiple_open_planned": multi_open,
+        "survey_encounters_not_on_a_live_pump": stray,
+        "by_next_due_status": _counter(r["next_due_status"] for r in rows),
+    }
+    if multi_open:
+        qc["warnings"].append(
+            f"{multi_open} pump(s) have more than one open planned survey "
+            "(pump_schedule.multiple_open_planned = 1).")
+    rows.sort(key=lambda r: tuple(str(r[k] or "") for k in
+                                  ("state", "district", "village", "subject_name", "subject_id")))
     return rows
 
 
