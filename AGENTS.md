@@ -25,8 +25,9 @@ It produces analysis *inputs*. It does no analysis.
 | `1-data/12-avni/` | Local mirror of the Box data folder. Fully gitignored. |
 | `1-data/12-avni/120-raw/` | Append-only raw API snapshots, `pull_<UTC>.json`. |
 | `1-data/12-avni/121-clean/` | Derived CSV tables, report, `media/`. Rewritten each run. |
+| `1-data/12-avni/123-reviews/` | Reviewer decisions from the review UI. Human input; append-only log. |
 | `2-code/20-programs/` | Reusable code: `avni_auth.py`, `envfile.py`, `avni_pipeline/`. **The import root.** |
-| `2-code/21-wrangling/` | The three CLI programs: `avni_to_tables.py`, `fetch_media.py`, `sync_box.py`. |
+| `2-code/21-wrangling/` | The four CLI programs: `avni_to_tables.py`, `fetch_media.py`, `sync_box.py`, `review_app.py`. |
 | `3-output/31-notebooks/` | Exploratory notebooks. Nothing here is an input to anything. |
 | `4-documentation/40-data-sources/` | What Avni is, how the API behaves, how to authenticate. |
 | `4-documentation/41-data-dictionaries/` | Column-level documentation of the output tables. |
@@ -43,7 +44,7 @@ by their parent's README rather than carrying one each.
 **`2-code/20-programs/` is the import root.** Entry scripts add it to
 `sys.path`; nothing else may.
 
-- `Main.py` and the three programs in `2-code/21-wrangling/` are entry scripts.
+- `Main.py` and the four programs in `2-code/21-wrangling/` are entry scripts.
   They may `sys.path.insert` the import root.
 - Modules inside `avni_pipeline/` may not. Never add `sys.path.insert` inside
   `avni_pipeline/`.
@@ -68,7 +69,7 @@ across the whole repo first.
 - **CSV table names are load-bearing code constants, not filenames you may
   tidy.** `subjects.csv`, `encounters.csv`, `fact_self_report_survey.csv`,
   `fact_grievance.csv`, `fact_payment_rate.csv`, `observations_long.csv`,
-  `operators.csv` are read back by name from `emit_csv.ANALYSIS_TABLES` (and
+  `operators.csv`, `pump_schedule.csv` are read back by name from `emit_csv.ANALYSIS_TABLES` (and
   its `VOIDED_TABLES` sibling). They must **not** be renamed into numbered
   form (`121-subjects.csv` and friends). Renaming them silently breaks the
   `--source csv` re-render path, the manifest and the data dictionary.

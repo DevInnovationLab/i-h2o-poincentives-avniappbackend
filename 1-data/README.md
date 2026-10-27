@@ -7,12 +7,13 @@ repository owns** — Box is the system of record, this is a working copy.
 12-avni/
   120-raw/     append-only raw API snapshots  (pull_<UTC>.json)
   121-clean/   derived tables, report, media/ (rewritten each run)
+  123-reviews/ reviewer decisions from the review UI (append-only log)
 ```
 
 ## What belongs here
 
 Only what the pipeline reads and writes: raw snapshots in `120-raw/`, derived
-outputs in `121-clean/`. Each folder carries a sidecar `.md` describing what
+outputs in `121-clean/`, and reviewer decisions in `123-reviews/`. Each folder carries a sidecar `.md` describing what
 lives in it.
 
 ## What must never go here
@@ -20,7 +21,9 @@ lives in it.
 - Anything that is not Avni pump data. Other sources get their own numbered
   folder, mirroring Box.
 - Anything hand-edited. Everything in `121-clean/` is machine-written and will
-  be overwritten on the next run; edit the code, not the output.
+  be overwritten on the next run; edit the code, not the output. The one
+  folder of human input, `123-reviews/`, is written by the review UI, never by
+  hand.
 
 ## What must never leave here
 

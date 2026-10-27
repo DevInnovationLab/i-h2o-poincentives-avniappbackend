@@ -15,7 +15,7 @@ repository** — see [Where the data lives](#where-the-data-lives).
 Main.py                  entry point: wraps the scripts in 2-code/
 1-data/12-avni/          local landing area for a pull (git-ignored, empty here)
 2-code/20-programs/      avni_auth.py (the API client) + avni_pipeline/ (the library)
-2-code/21-wrangling/     avni_to_tables.py, fetch_media.py, sync_box.py
+2-code/21-wrangling/     avni_to_tables.py, fetch_media.py, sync_box.py, review_app.py
 3-output/31-notebooks/   analysis notebooks
 4-documentation/         data-source reference, data dictionaries, design docs
 ```
@@ -39,6 +39,25 @@ python3 2-code/21-wrangling/fetch_media.py --dir 1-data/12-avni/121-clean/
 python3 2-code/21-wrangling/sync_box.py --dry-run \
     --dir 1-data/12-avni/121-clean/ --raw 1-data/12-avni/120-raw/_raw.json
 ```
+
+## Reviewing submissions
+
+```bash
+python3 Main.py review --village "Village A" --village "Village B"
+```
+
+Opens a local page (127.0.0.1 only) for one review period at a time (periods
+end on the 13th and 27th of each month, India time). Each pump follows Avni's
+rolling 5-day schedule (the next survey is due 5 days after the last one came
+in); every cycle shows its survey, labelled on time or overdue, or a missed slot, and both get Approve / Reject buttons that
+take a reason. Grievance and payment-issue forms are reviewed alongside. The app
+is connected to **Box**, the system of record: it reads
+`12-avni/121-clean/` from Box Drive and appends every decision to
+`12-avni/123-reviews/review_log.csv` there, summarised in `review_status.csv`
+(the review sheet: one row per pump per 5-day cycle, ready for Excel or Google Sheets). A fresh pull shows
+up once it is published with `Main.py box`. Decisions survive restarts and
+re-pulls. See
+[`review-tables.md`](4-documentation/41-data-dictionaries/review-tables.md).
 
 The pipeline is plain Python 3 (standard library only) except for **boto3**,
 which is needed only for programmatic Cognito login:
@@ -65,6 +84,7 @@ ask the study lead.
 |---|---|---|
 | `12-avni/120-raw/` | Raw API snapshots, `pull_<UTC>.json` | **Append-only.** A pull can never be reproduced, so a snapshot is evidence and is never overwritten. |
 | `12-avni/121-clean/` | The CSV tables, `data_dictionary.csv`, `_manifest.json`, `_quality_report.md`, `report.html`, `media/` | **Overwritten every run.** Everything in it is derived from a snapshot by code. |
+| `12-avni/123-reviews/` | `review_log.csv`, `review_status.csv` | **Append-only log.** Reviewer decisions from the review UI; human input, never regenerated. |
 
 `1-data/12-avni/` mirrors that layout locally and is git-ignored. Nothing under
 it, and no `.env`, should ever be committed: the tables carry operator usernames
@@ -79,7 +99,8 @@ published.
 | Document | What it covers |
 |---|---|
 | [`4-documentation/40-data-sources/avni-api.md`](4-documentation/40-data-sources/avni-api.md) | **Start here.** The Avni API: access, the Cognito auth flow and the 500 trap, environment variables, the data model and join keys, every endpoint, pagination, the entity field reference, media handling, debugging history and gotchas. |
-| [`4-documentation/41-data-dictionaries/avni-tables.md`](4-documentation/41-data-dictionaries/avni-tables.md) | The seven output tables: grain, columns, dtypes, and the encoding contract. |
+| [`4-documentation/41-data-dictionaries/avni-tables.md`](4-documentation/41-data-dictionaries/avni-tables.md) | The eight output tables: grain, columns, dtypes, and the encoding contract. |
+| [`4-documentation/41-data-dictionaries/review-tables.md`](4-documentation/41-data-dictionaries/review-tables.md) | The two review CSVs written by the review UI. |
 | [`4-documentation/42-design/pipeline-build-spec.md`](4-documentation/42-design/pipeline-build-spec.md) | The original build spec. **Historical** — parts of it were never built. |
 | [`AGENTS.md`](AGENTS.md) | Conventions for coding agents working in this repo. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to set up, run and contribute. |
