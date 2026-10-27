@@ -104,10 +104,30 @@ def parse_datetime(value):
     return dt.astimezone(datetime.timezone.utc)
 
 
-def parse_date(value):
-    """Parse to a ``date`` (the date part of a timestamp), else None."""
+def parse_date(value, tzinfo=None):
+    """Parse to a calendar ``date``, else None.
+
+    A bare ``yyyy-mm-dd`` is already a calendar date and is returned as-is. A
+    timestamp is converted to ``tzinfo`` first (the run's local timezone) and
+    *then* truncated, so Avni's "midnight IST expressed in UTC" encoding
+    (``...T18:30:00.000Z`` on the previous UTC day) lands on the India date.
+    Without ``tzinfo`` the UTC date part is used.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
+        return value
+    if not isinstance(value, datetime.datetime):
+        s = str(value).strip()
+        if DATE_RE.match(s):
+            try:
+                return datetime.date.fromisoformat(s)
+            except ValueError:
+                return None
     dt = parse_datetime(value)
-    return dt.date() if dt else None
+    if dt is None:
+        return None
+    return (dt.astimezone(tzinfo) if tzinfo is not None else dt).date()
 
 
 def parse_time_minutes(value):
@@ -314,11 +334,13 @@ def concept_spec(concept_name):
     return None
 
 
-def coerce(spec, value):
+def coerce(spec, value, tzinfo=None):
     """Cast a raw observation value according to its ConceptSpec dtype.
 
     Returns the typed Python value (or None). Never raises: an unparseable value
     becomes None and is still visible in observations_long.csv as text.
+    ``tzinfo`` is the run's local timezone; ``date`` concepts are calendar dates
+    in that zone (see ``parse_date``).
     """
     if value is None or value == "":
         return None
@@ -331,7 +353,7 @@ def coerce(spec, value):
     if dt == "bool":
         return parse_bool(value)
     if dt == "date":
-        return parse_date(value)
+        return parse_date(value, tzinfo)
     if dt == "datetime":
         return parse_datetime(value)
     if dt == "time":
@@ -426,6 +448,7 @@ FACTOR_LEVELS = {
     "form_version": ["v1", "v2"],
     "grievance_kind": ["General", "Survey related"],
     "tablets_refilled_source": ["v1", "v2"],
+    "next_due_status": ["upcoming", "due", "overdue", "none"],
 }
 
 # Address hierarchy levels we promote to their own columns (anything else stays
